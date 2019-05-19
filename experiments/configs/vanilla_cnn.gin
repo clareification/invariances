@@ -1,0 +1,6 @@
+import model_comparison.models.transformations as iv
+import model_comparison.models.networks as nets
+
+# Configs for FAModel
+
+# Configs for cnn_fn
