@@ -43,7 +43,7 @@ class Runner():
 
 
 
-ckpt_dir = 'fashiontdl/test/'
+ckpt_dir = 'fashiontdl/2testvar/'
 eqv = True
 latest_ckp = tf.train.latest_checkpoint(ckpt_dir)
 loss_fn = flip_logits
@@ -76,13 +76,13 @@ class Data:
         Xtest, Ytest = data.get_set('test')
         img_rows, img_cols, nchannels = Xtest.shape[1:4]
         input_dim =img_rows*img_cols*nchannels
-        print(img_rows, img_cols, nchannels)
+        # print(img_rows, img_cols, nchannels)
 
 for i, eqv in itertools.product(range(num_iters), [None]):
     eqv_dir = eqv if eqv else 'noav2filter'
     ckpt_dir_i = ckpt_dir + '/' + eqv_dir + '/' + str(i)
     dvm =models.FAModel(networks.cnn_fn, Data.X, Data.Y,
-        Data.Xtest, Data.Ytest, averaging=None, ckpt_dir=ckpt_dir_i, batch_size=32)
+        Data.Xtest, Data.Ytest, averaging='p4', ckpt_dir=ckpt_dir_i, batch_size=32)
 
     # dvm = models.DeepVM(10, 10, averaging=None, ckpt_dir=ckpt_dir, train_features=True)
     # with tf.variable_scope(dvm.name, reuse=tf.AUTO_REUSE):
@@ -95,11 +95,11 @@ for i, eqv in itertools.product(range(num_iters), [None]):
 
     
     print(tf.trainable_variables())
-    dvm.optimize(steps=10)
-    # dvm.optimizeDataFit(Data.X, Data.Y, steps=5000)
-    ps = dvm.predict(Data.X[0])
+    dvm.optimize(steps=5000)
+    #dvm.optimizeDataFit(Data.X, Data.Y, steps=5000)
+    #ps = dvm.predict(Data.X[0])
     print("Done optimizing")
-    print("SHAPE:", ps.shape)
+    # print("SHAPE:", ps.shape)
     tf.reset_default_graph()
 # dvm =models.DeepVM(60, 10, averaging=None, ckpt_dir=ckpt_dir)
 

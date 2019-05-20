@@ -14,7 +14,7 @@ float_type=np.float64
 class FAModel():
     def __init__(self, cnn_fn, X, Y, Xtest, Ytest,
                 averaging=None, optimizer=tf.train.AdamOptimizer,
-                batch_size=32, learning_rate = 0.001, name="model",
+                batch_size=32, learning_rate = 0.0001, name="model",
                 loss_fn=tf.nn.softmax_cross_entropy_with_logits_v2, ckpt_dir = None):
         self.cnn_fn = cnn_fn
         self.output_dim = Y.shape[1]
@@ -45,13 +45,13 @@ class FAModel():
                 n_samples = 4
                 d = lambda x, i : iv.c4_rotate(x, i)
                 df = lambda x : tf.map_fn(lambda i : d(x, i), tf.constant([1,2,3,4]), dtype=tf.float32)
-                transformed_x = tf.reshape(tf.map_fn(df, x), [-1]+list(self.image_shape))
+                transformed_x = x #tf.reshape(tf.map_fn(df, x), [-1]+list(self.image_shape))
                 print(transformed_x.shape, "Transformed shape")
             elif averaging==None:
                 print("NO averaging")
                 n_samples = 1
-                transformed_x = tf.Variable(x, trainable=False)
-                print(x.shape, transformed_x.shape.ndims)
+                transformed_x = x #tf.Variable(x, trainable=False)
+                # print(x.shape, transformed_x.shape.ndims)
             else:
                 n_samples = 10
                 d = lambda x, i : averaging(x)
@@ -59,10 +59,12 @@ class FAModel():
                 transformed_x = tf.reshape(tf.map_fn(df, x), [-1] + list(self.image_shape))
             with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
                 y = self.cnn_fn(transformed_x, self.output_dim)
-                if averaging == None:
-                    return y
+                # if averaging == None:
+                #    return y
                 print("Done cnn")
-                y = tf.reduce_mean(tf.reshape(y, [n_samples, x.shape[0], self.output_dim]), axis=0)
+                print(y.shape)
+                y = tf.reduce_mean(tf.reshape(y, [32, n_samples, self.output_dim]), axis=1)
+                print("Y shape: ", y.shape)
             return y
 
         return f
@@ -70,19 +72,22 @@ class FAModel():
     def predict(self, x):
         return self.network(x)
 
-    def optimize(self, steps=1):
+    def optimize(self, steps=1000):
         num_indices = self.Y.shape[0]
         train_indices = tf.random_uniform(
         [self.batch_size], 0, num_indices, tf.int64)
         num_test_indices = self.Ytest.shape[0]
         test_indices = tf.random_uniform(
         [self.batch_size], 0, num_test_indices, tf.int64)
-
-
-        train_data_node = tf.gather(self.X, train_indices)
-        print(train_data_node.shape, "Train node")
+        train_indices2 = tf.map_fn(lambda x : [0,1,2,3] + x - (x % 4), train_indices)
+        train_indices2 = tf.reshape(train_indices2, [-1])
+        print(train_indices2.shape, train_indices.shape)
+        train_data_node = tf.gather(self.X, train_indices2)
+        
         train_labels_node = tf.gather(self.Y, train_indices)
-        test_data_node = tf.gather(self.Xtest, test_indices)
+        test_indices2 = tf.map_fn(lambda x : [0,1,2,3] + x - (x % 4), test_indices)
+        test_indices2 = tf.reshape(test_indices2, [-1])
+        test_data_node = tf.gather(self.Xtest, test_indices2)
         test_labels_node = tf.gather(self.Ytest, test_indices)
 
         train_preds = self.predict(train_data_node)
@@ -95,16 +100,28 @@ class FAModel():
         tf.summary.scalar('Test loss', test_loss_op)
         summary_op = tf.summary.merge_all()
         train_op = self.optimizer.minimize(loss_op)
-        print("Starting training:")
+        train_op = slim.learning.create_train_op(loss_op, self.optimizer)
+        print("Starting training for steps: %s" % steps)
+        builder = tf.profiler.ProfileOptionBuilder
+        opts = builder(builder.time_and_memory()).order_by('micros').build()
+        opts2 = tf.profiler.ProfileOptionBuilder.trainable_variables_parameter()
+        # with tf.contrib.tfprof.ProfileContext('/tmp/train_dir',
+        #                              trace_steps=range(10, 20),
+        #                              dump_steps=[20]) as pctx:
+        #        # Run online profiling with 'op' view and 'opts' options at step 15, 18, 20.
+        #        pctx.add_auto_profiling('op', opts, [15, 18, 20])
+        #        # Run online profiling with 'scope' view and 'opts2' options at step 20.
+        #        pctx.add_auto_profiling('scope', opts2, [20])
+        print("Finished setting up profiler.")
         final_loss = slim.learning.train(
-          train_op,
-          logdir=None,
-          number_of_steps=steps,
-          save_summaries_secs=1,
-          log_every_n_steps=500)
-        print("done")
-        # print("Finished training. Last batch loss:", final_loss)
-        # print("Checkpoint saved in %s" % self.ckpt_dir)
+                  train_op,
+                  logdir=self.ckpt_dir,
+                  number_of_steps=steps,
+                  save_summaries_secs=1,
+                  log_every_n_steps=500)
+                #  print("done")
+        print("Finished training. Last batch loss:", final_loss)
+        print("Checkpoint saved in %s" % self.ckpt_dir)
         # s = tf.Session()
         # s.run(tf.global_variables_initializer())
         # print(tf.trainable_variables())
